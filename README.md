@@ -12,7 +12,7 @@ This repository contains the analysis code and associated scripts for the paper 
 ## Installation
 Clone this repository to your local machine:
 ```bash
-git clone https://github.com/[username]/[repo-name].git
+git clone https://github.com/suekn/decedent_xeno.git
 ```
 
 Install required R and Python packages:
