@@ -32,7 +32,3 @@ For questions, please contact:
 - Nathan Suek (ns3435@cumc.columbia.edu)
 - Farshid Fathe (ff2495@cumc.columbia.edu)
 - Ben Vermette (bv2269@cumc.columbia.edu)
-
-## License
-This project is licensed under the MIT License. See the LICENSE file for details.
-
