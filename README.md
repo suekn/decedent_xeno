@@ -6,17 +6,6 @@
 ## Description
 This repository contains the analysis code and associated scripts for the paper titled "Physiology and Immunology of Pig-to-Human Decedent Kidney Xenotransplant ". The work focuses on using single-cell RNA sequencing and TCR sequencing combined with xenoreactivity data to study immune cell dynamics in xenotransplantation.
 
-## Installation
-Clone this repository to your local machine:
-```bash
-git clone https://github.com/suekn/decedent_xeno.git
-```
-
-Install required R and Python packages:
-```bash
-# R dependencies
-install.packages(c("Seurat", "SingleCellExperiment", "tidyverse", "ggplot2", "ggalluvial"))
-```
 ## Data
 Raw data is not included in this repository. Data are uploaded at ***
 
