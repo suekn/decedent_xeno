@@ -1,0 +1,154 @@
+# EXTENDED DATA FIGURE 7A
+seurat_obj = readRDS('merged_post.rds')
+meta = seurat_obj@meta.data
+
+Idents(seurat_obj) = 'XDRTCC'
+sub = subset(seurat_obj, idents = 'XDRTCC')
+meta = sub@meta.data
+
+
+library(SingleR); library(celldex); library(SummarizedExperiment)
+mon <- celldex::MonacoImmuneData()
+sce <- as.SingleCellExperiment(sub)
+
+# fine labels with stricter pruning
+pred_fine  <- SingleR(test = sce, ref = mon, labels = colData(mon)$label.fine, prune = FALSE)
+flag <- pruneScores(pred_fine, nmads = 3, min.diff.med = 0, min.diff.next = 0)
+
+sub$mon_label <- ifelse(flag, NA, pred_fine$labels)
+sub$mon_label_refined <- ifelse(sub$mon_label %in% c("Th1 cells","Th1/Th17 cells","Th2 cells","Th17 cells"),
+                         "CD4 helper", as.character(sub$mon_label))
+sub$mon_label_refined <- ifelse(as.character(sub$mon_label_refined) %in% c("Vd2 gd T cells","Non-Vd2 gd T cells"), "", as.character(sub$mon_label_refined))
+
+table = table(sub$POD, sub$mon_label_refined) 
+
+
+
+# Two XDRTCCs are known to migrate over space
+# CASSISSYNEQFF
+# CASSVTGTSGRYEQFF
+meta = sub@meta.data
+highlight = meta %>% filter(XRTCC_cdr3 %in% 'CASSVTGTSGRYEQFF') # replace with CDR3 of interest
+highlight = highlight %>% select(POD, mon_label_refined)
+highlight = highlight %>% filter(mon_label_refined != '') # Vd2 gd T cells, Non-Vd2 gd T cells were made "" in above section, i'll remove it for following analysis
+highlight = highlight %>% filter(mon_label_refined != 'CD4 helper') # Th1 (or CD4 helper) was one of the TCRs, which doesn't make sense bc the other T cells with the same TCR were CD8s, i'll remove it for following analysis
+
+res <- highlight %>%
+  mutate(mon_label_refined = as.character(mon_label_refined)) %>%
+  filter(POD %in% c("POD14L","POD33K"), !is.na(mon_label_refined)) %>%
+  group_by(POD, mon_label_refined) %>%
+  dplyr::summarise(n = dplyr::n(), .groups = "drop") %>%
+  group_by(POD) %>%
+  mutate(prop = n / sum(n)) %>%
+  ungroup()
+
+res <- res %>%
+  mutate(POD = factor(POD, levels = c("POD14L", "POD33K")))
+
+# Copy from clipboard: 800 x 600
+ggplot(res, aes(x = factor(POD), y = prop, fill = mon_label_refined)) +
+  geom_col(width = 0.7) +
+  geom_text(aes(label = paste0("n = ", n)),
+            position = position_stack(vjust = 0.5),
+            color = "black", size = 6) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 1)) +
+  labs(x = NULL, y = "Proportion within cluster", fill = "mon_label_refined") +
+  theme_classic() +
+  theme(
+    legend.title = element_text(size = 22),
+    legend.text  = element_text(size = 20),
+    axis.title.y = element_text(size = 22),
+    axis.text.x  = element_text(size = 22),
+    axis.text.y  = element_text(size = 22)
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Effector memory CD8 T cells" = "#5F9BFF", 
+      "Central memory CD8 T cells"  = "#F8766D"  
+    )
+  )
+
+
+# EXTENDED DATA FIGURE 7B
+# Generate list of Indirect and Direct CD8 CD4
+setwd('Z:/CCTI_SYKES/EXP FF7- XKLT-001 Exp/Bulk TCRb sequincing Adaptive Data XKLT001/All MLRs, Official Analysis')
+xdrtcc_CD8 = read.csv('MasterCD8DRTCCs_AgainstPreTx.csv')
+xdrtcc_CD4 = read.csv('MasterCD4DRTCCs_AgainstPreTx.csv')
+
+xdrtcc_CD4 = xdrtcc_CD4 %>% mutate(response = ifelse(
+  (XKLT001.POD49.MLR.Rcipient.PBMC.vs.dodnor.Pig.PBMC.CD4CFSElow_TCRB > 0 | XKLT001_Direct_LN_v_pig_DC_CD4_CFSE_low_TCRB > 0 |
+     XKLT001_POD_28_Direct_MLR_CD4_CFSE_low_TCRB > 0 | XKLT001_Direct_PBMC_v_pig_DC_CD4_CFSE_low_TCRB > 0) &
+    XKLT001_Indirect_MLR_CD4_CFSE_low_TCRB == 0, 'CD4 Direct', ifelse(
+      (XKLT001.POD49.MLR.Rcipient.PBMC.vs.dodnor.Pig.PBMC.CD4CFSElow_TCRB == 0 | XKLT001_Direct_LN_v_pig_DC_CD4_CFSE_low_TCRB == 0 |
+         XKLT001_POD_28_Direct_MLR_CD4_CFSE_low_TCRB == 0 & XKLT001_Direct_PBMC_v_pig_DC_CD4_CFSE_low_TCRB == 0) &
+        XKLT001_Indirect_MLR_CD4_CFSE_low_TCRB > 0, 'CD4 Indirect', 'CD4 Undefined')))
+
+xdrtcc_CD8 = xdrtcc_CD8 %>% mutate(response = ifelse(
+  (XKLT001.POD49.MLR.Rcipient.PBMC.vs.dodnor.Pig.PBMC.CD8CFSElow_TCRB > 0 | XKLT001_Direct_LN_v_pig_DC_CD8_CFSE_low_TCRB > 0 |
+     XKLT001_POD_28_Direct_MLR_CD8_CFSE_low_TCRB > 0 | XKLT001_Direct_PBMC_v_pig_DC_CD8_CFSE_low_TCRB > 0) &
+    XKLT001_Indirect_MLR_CD8_CFSE_low_TCRB == 0, 'CD8 Direct', ifelse(
+      (XKLT001.POD49.MLR.Rcipient.PBMC.vs.dodnor.Pig.PBMC.CD8CFSElow_TCRB == 0 | XKLT001_Direct_LN_v_pig_DC_CD8_CFSE_low_TCRB == 0 |
+         XKLT001_POD_28_Direct_MLR_CD8_CFSE_low_TCRB == 0 & XKLT001_Direct_PBMC_v_pig_DC_CD8_CFSE_low_TCRB == 0) &
+        XKLT001_Indirect_MLR_CD8_CFSE_low_TCRB > 0, 'CD8 Indirect', 'CD8 Undefined'))) 
+
+# Determine if XDRTCC in kidney are from indirect or direct
+meta = seurat_obj@meta.data
+meta = meta %>% rownames_to_column('rowname') %>% 
+  left_join(xdrtcc_CD4 %>% select(Amino.Acid, response) %>% dplyr::rename(response_CD4 = response), by = c("TCRb_1" = "Amino.Acid")) %>%
+  left_join(xdrtcc_CD8 %>% select(Amino.Acid, response) %>% dplyr::rename(response_CD8 = response), by = c("TCRb_1" = "Amino.Acid")) %>%
+  column_to_rownames('rowname')
+meta = meta %>% mutate(response = case_when(
+  is.na(response_CD4) ~ response_CD8, 
+  is.na(response_CD8) ~ response_CD4))
+meta = meta %>% select(-c(response_CD4, response_CD8))  
+meta[is.na(meta$response),]$response = ''
+seurat_obj@meta.data = meta
+
+table(meta$response, meta$POD)
+
+# EXTENDED DATA FIGURE 7C
+# Copy from clipboard: 2003 x 450 
+xlim <- range(-14:22)
+ylim <- range(-14:22)
+
+library(scCustomize)
+DimPlot_scCustom(seurat_obj, split.by = 'POD', group.by = 'response', colors_use = c('lightgray', "#00BE67", "#C77CFF", "#FDE725FF", "#F8766D", "brown", "#00B4F0") , order = c('CD8 Undefined', 'CD4 Indirect', 'CD8 Indirect', 'CD4 Direct', 'CD8 Direct', ''), pt.size = 2, num_columns = 5) & NoLegend() & labs(x = "UMAP_1", y = "UMAP_2")  & xlim(xlim) & ylim(ylim) &  theme(axis.title = element_text(size = 30), 
+                   axis.text  = element_text(size = 28),
+                   legend.title = element_text(size = 30),
+                   legend.text  = element_text(size = 28))
+
+
+# EXTENDED DATA FIGURE 7D
+meta = seurat_obj@meta.data
+
+select1 = meta %>% filter(XRTCC_cdr3 == 'CASSVTGTSGRYEQFF') %>% row.names()
+select2 = meta %>% filter(XRTCC_cdr3 == 'CASSISSYNEQFF') %>% row.names()
+
+meta$migrate <- ""
+meta$migrate[rownames(meta) %in% select2] <- "CASSISSYNEQFF"
+meta$migrate[rownames(meta) %in% select1] <- "CASSVTGTSGRYEQFF"
+meta$migrate <- factor(meta$migrate, levels = c("CASSISSYNEQFF","CASSVTGTSGRYEQFF", ""))
+seurat_obj@meta.data = meta
+
+# Copy from clipboard: 2003 x 450 
+xlim <- range(-14:22)
+ylim <- range(-14:22)
+
+DimPlot_scCustom(seurat_object = seurat_obj, split.by   = "POD", group.by   = "migrate", num_columns = 5, order = c("CASSVTGTSGRYEQFF", "CASSISSYNEQFF", ""), label = FALSE, colors_use = c("#3A7BD5","#E15759", "grey88"), pt.size = 2) & labs(x = "UMAP_1", y = "UMAP_2") & xlim(xlim) & ylim(ylim) & NoLegend() & 
+  theme(axis.title = element_text(size = 30), 
+        axis.text  = element_text(size = 28),
+        legend.title = element_text(size = 30),
+        legend.text  = element_text(size = 28))
+
+# EXTENDED DATA FIGURE 7E
+# Copy from clipboard: 450 x 450
+FeaturePlot(seurat_obj, features = c('ICOS'), pt.size = 2, order = T) + xlim(xlim) + ylim(ylim) + NoLegend() + ggtitle(NULL) + theme(axis.title = element_text(size = 30), axis.text  = element_text(size = 28),legend.title = element_text(size = 30), legend.text  = element_text(size = 28)) + labs(x = "UMAP_1", y = "UMAP_2")
+
+FeaturePlot(seurat_obj, features = c('CXCR5'), pt.size = 2, order = T) + xlim(xlim) + ylim(ylim) + NoLegend() + ggtitle(NULL) + theme(axis.title = element_text(size = 30), axis.text  = element_text(size = 28),legend.title = element_text(size = 30), legend.text  = element_text(size = 28)) + labs(x = "UMAP_1", y = "UMAP_2")
+
+FeaturePlot(seurat_obj, features = c('CD40LG'), pt.size = 2, order = T) + xlim(xlim) + ylim(ylim) + NoLegend() + ggtitle(NULL) + theme(axis.title = element_text(size = 30), axis.text  = element_text(size = 28),legend.title = element_text(size = 30), legend.text  = element_text(size = 28)) + labs(x = "UMAP_1", y = "UMAP_2")
+
+tfh = WhichCells(seurat_obj, expression = CXCR5 > 0.5 & ICOS > 0.5 & CD40LG > 0.5)
+xdrtcc = meta %>% filter(XDRTCC == 'XDRTCC') %>% row.names()
+tfh_xdrtcc = intersect(tfh, xdrtcc)
+DimPlot(seurat_obj, cells.highlight = tfh_xdrtcc, pt.size = 2, sizes.highlight = 2) + xlim(xlim) + ylim(ylim) + NoLegend() + ggtitle(NULL) + theme(axis.title = element_text(size = 30), axis.text  = element_text(size = 28),legend.title = element_text(size = 30), legend.text  = element_text(size = 28)) + labs(x = "UMAP_1", y = "UMAP_2")
